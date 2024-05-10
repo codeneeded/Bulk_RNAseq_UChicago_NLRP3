@@ -1,6 +1,17 @@
 ### Libraries
+library(tidytree)
 library(DESeq2)
-
+library(circlize)
+library(ComplexHeatmap)
+library(clusterProfiler)
+library(DOSE)
+library(enrichplot)
+library(org.Mm.eg.db)
+library(magrittr)
+library(pathview)
+library(stats)
+library(ggplot2)
+library(data.table)
 
 ### Read Files ####
 
@@ -194,3 +205,242 @@ for (condition in conditions) {
   write.csv(result_clean, 
             file.path(output_dir, paste0(result_name, ".csv")))
 }
+
+### Pathway Analysis ####
+
+# Define the function to filter and create a named vector for pathway analysis
+create_genelist <- function(dif_genes, log2fc_threshold = 1.5, adj_pvalue_threshold = 0.05) {
+  # Filter for significant genes based on adjusted p-value and fold change thresholds
+  filtered_genes <- dif_genes[abs(dif_genes$log2FoldChange) > log2fc_threshold & 
+                                dif_genes$padj < adj_pvalue_threshold, ]
+  
+  # Create a named vector of log2 fold changes with gene names as vector namesn
+  
+  genelist <- setNames(filtered_genes$log2FoldChange, rownames(filtered_genes))
+  
+  # Remove any NA values
+  genelist <- na.omit(genelist)
+  
+  # Sort the list in decreasing order (required for clusterProfiler)
+  genelist <- sort(genelist, decreasing = TRUE)
+  
+  # Return the final named vector
+  return(genelist)
+}
+
+create_genelist_Entrez <-function(dif_genes, log2fc_threshold = 1.5, adj_pvalue_threshold = 0.05)  {
+  # Filter for significant genes based on adjusted p-value and fold change thresholds
+  filtered_genes <- dif_genes[abs(dif_genes$log2FoldChange) > log2fc_threshold & 
+                                dif_genes$padj < adj_pvalue_threshold, ]
+  
+  ## Ad columns with EntrezID
+  x <- bitr(rownames(filtered_genes), fromType="SYMBOL", toType="ENTREZID", OrgDb="org.Mm.eg.db",drop = F)
+  filtered_genes$SYMBOL <- rownames(filtered_genes)
+  filtered_genes <- merge(filtered_genes,x,by="SYMBOL")
+  filtered_genes <- na.omit(filtered_genes) #Remove Missing Values
+  genelist <- extract2(filtered_genes, 'log2FoldChange') %>% set_names(filtered_genes$ENTREZID)
+  # sort the list in decreasing order (required for clusterProfiler)
+  genelist = sort(genelist, decreasing = TRUE)
+  return(genelist)
+}
+
+dge_result_names <- c("M1.Combo.vs.NLRP3.DGE", "M1.Combo.vs.ADT.DGE", 
+                      "M1.Combo.vs.U.DGE", "M1.NLRP3.vs.ADT.DGE",
+                      "M1.NLRP3.vs.U.DGE", "M1.ADT.vs.U.DGE", 
+                      "M2.Combo.vs.NLRP3.DGE", "M2.Combo.vs.ADT.DGE", 
+                      "M2.Combo.vs.U.DGE", "M2.NLRP3.vs.ADT.DGE",
+                      "M2.NLRP3.vs.U.DGE", "M2.ADT.vs.U.DGE",
+                      "M2vsM1.Combo.DGE", "M2vsM1.NLRP3.DGE", 
+                      "M2vsM1.ADT.DGE", "M2vsM1.U.DGE")
+
+
+for (names in dge_result_names) {
+  dge <- get(names)
+  condition <- gsub('.DGE','',names)
+  g1 <- create_genelist(dge)
+  g2 <- create_genelist_Entrez(dge)
+  assign(paste0(condition,'.genelist'), g1)
+  assign(paste0(condition,'.egenelist'), g2)
+  
+}
+
+#### Create folders to save output ####
+base_dir <- "C:/Users/axi313/Documents/Bulk_RNAseq_UChicago_NLRP3/Pathway_Analysis"
+
+# Create main folders
+main_folders <- c("M1", "M2", "M2vsM1")
+for (folder in main_folders) {
+  dir.create(file.path(base_dir, folder), recursive = TRUE, showWarnings = FALSE)
+}
+
+# Function to determine the main folder
+get_main_folder <- function(name) {
+  if (grepl("^M2vsM1", name)) {
+    return("M2vsM1")
+  } else if (grepl("^M2", name)) {
+    return("M2")
+  } else {
+    return("M1")
+  }
+}
+
+# Loop through the result names to create subdirectories
+for (name in dge_result_names) {
+  clean_name <- gsub(".DGE", "", name) # Remove the '.DGE' part
+  main_folder <- get_main_folder(clean_name) # Determine the main folder
+  # Create the subdirectory within the appropriate main folder
+  dir.create(file.path(base_dir, main_folder, clean_name), recursive = TRUE, showWarnings = FALSE)
+}
+
+####################### Working Dirs To Save Output ##########################
+### M2.Combo.vs.NLRP3, "M1.NLRP3.vs.U", "M2.ADT.vs.U", "M1.NLRP3.vs.ADT", "M1.Combo.vs.ADT
+#have too few DEGs - M2.NLRP3.vs.U no sig enrichment, "M2vsM1.Combo"
+
+all.sample.names <-c("M1.Combo.vs.NLRP3", "M1.Combo.vs.U",
+                     "M1.NLRP3.vs.ADT","M1.ADT.vs.U", "M2.Combo.vs.ADT", 
+                     "M2.Combo.vs.U", "M2.NLRP3.vs.ADT",
+                     "M2.NLRP3.vs.U", "M2vsM1.Combo", 
+                     "M2vsM1.NLRP3", "M2vsM1.ADT", 
+                     "M2vsM1.U")
+all.sample.names.2 <-c( "M2vsM1.U")
+
+for (runx in all.sample.names.2) {
+  
+    ### Move to Working Directory and prepare Genelists for gsea and e.gsea
+    wd <- paste0('C:/Users/axi313/Documents/Bulk_RNAseq_UChicago_NLRP3/Pathway_Analysis/',gsub("\\..*", "", runx),'/',runx)
+    setwd(wd)
+    genelist <- get(paste0(runx,'.genelist'))
+    egenelist <-get(paste0(runx,'.egenelist'))
+    # Directory names
+    directories <- c("GO", "KEGG", "KEGG_Pathview")
+    
+    # Create each directory if it doesn't already exist
+    for (dir in directories) {
+      if (!dir.exists(dir)) {
+        dir.create(dir)
+      } else {
+        message(paste("Directory", dir, "already exists"))
+      }
+    }
+    
+    
+    ############## GO Analysis ###########
+    
+    ### GO Enrichment (Overexpression Analysis)
+    
+    setwd(paste0(wd,'/GO'))
+    
+    ### GSEA Analysis
+    go.gsea <- gseGO(geneList     = genelist,
+                     OrgDb        = org.Mm.eg.db,
+                     keyType = 'SYMBOL',
+                     ont          = "All",
+                     minGSSize    = 5,
+                     maxGSSize    = 500,
+                     pvalueCutoff = 0.05,
+                     verbose      = TRUE)
+    
+    ### Results CSV
+    
+    df.gsea <- as.data.table(go.gsea)
+    write.csv(df.gsea,paste0(runx,'_GO_GSEA_Enrichment.csv'))
+    
+    ### GO Dotplot
+    
+    dp.gsea <- dotplot(go.gsea, showCategory=30) + ggtitle("dotplot for GO GSEA")
+    ggsave(paste0(runx,'_GO_Dotplot.png'),dpi=500, height =16, width = 13, dp.gsea)
+    
+    ### Gene-Concept Network
+    
+    go.gc.p1 <- cnetplot(go.gsea,color.params = list(foldChange = genelist))
+    go.gc.p2 <- cnetplot(go.gsea, color.params = list(foldChange = genelist), circular = TRUE, colorEdge = TRUE) 
+    go.gc.p3 <- cowplot::plot_grid(go.gc.p1, go.gc.p2, ncol=2, labels=LETTERS[1:2], rel_widths=c(.8, 1.2))
+    ggsave(paste0(runx,'_GO_Cnetplot.png'),dpi=500, height =16, width = 21,bg='white', go.gc.p3)
+    
+    ### Heatplot
+    hp.go.gsea <- heatplot(go.gsea, showCategory = 10, foldChange=genelist) 
+    ggsave(paste0(runx,'_GO_Heatplot.png'),dpi=500, height =11, width = 28,bg='white', hp.go.gsea)
+    
+    ### Emap Plot
+    go.gsea.tree <- pairwise_termsim(go.gsea)
+    emap.go.gsea <- emapplot(go.gsea.tree)
+    ggsave(paste0(runx,'_GO_Emmap.png'),dpi=500, height =11, width = 28,bg='white', emap.go.gsea)
+    
+    
+    #### KEGG GSEA ####
+    
+    setwd(paste0(wd,'/KEGG'))
+    
+    kegg.gsea <- gseKEGG(
+      geneList = egenelist,
+      keyType = 'ncbi-geneid',
+      organism = "mmu")
+    
+    ### Results CSV
+    df.KEGG <- as.data.table(kegg.gsea)
+    write.csv(df.KEGG,paste0(runx,'_KEGG_Enrichment.csv'))
+    
+    ### Dot Plot
+    
+    dp.kegg <- dotplot(kegg.gsea, showCategory=30) + ggtitle("dotplot for KEGG GSEA")
+    ggsave(paste0(runx,'_KEGG_Dotplot.png'),dpi=500, height =16, width = 13, dp.kegg)
+    
+    ## Gene-Concept Network
+    
+    kegg.gsea.2 <- setReadable(kegg.gsea, 'org.Mm.eg.db', 'ENTREZID')
+    kegg.p1 <- cnetplot(kegg.gsea.2,color.params = list(foldChange = genelist))
+    kegg.p2 <- cnetplot(kegg.gsea.2, color.params = list(foldChange = genelist), circular = TRUE, colorEdge = TRUE) 
+    kegg.p3 <- cowplot::plot_grid(kegg.p1, kegg.p2, ncol=2, labels=LETTERS[1:2], rel_widths=c(.8, 1.2))
+    ggsave(paste0(runx,'_KEGG_Cnetplot.png'),dpi=500, height =16, width = 21,bg='white', kegg.p3)
+    
+    ### Heatplot
+    
+    hp.kegg.gsea <- heatplot(kegg.gsea.2, showCategory = 20, foldChange=genelist) 
+    ggsave(paste0(runx,'_KEGG_Heatplot.png'),dpi=500, height =11, width = 28,bg='white', hp.kegg.gsea)
+    
+    ### Emap Plot
+    go.kegg.tree <- pairwise_termsim(kegg.gsea.2)
+    
+    emap.kegg.gsea <- emapplot(go.kegg.tree)
+    ggsave(paste0(runx,'_KEGG_Emmap.png'),dpi=500, height =11, width = 28,bg='white', emap.kegg.gsea)
+    
+    #### Pathway Overlay
+    image_directory <- paste0(wd,'/KEGG_Pathview')
+    setwd(image_directory)
+    
+    # Get Ids of pathways where adj Pval < 0.05
+    
+    KEGG.pathways <- df.KEGG[df.KEGG$p.adjust <0.05,]$ID
+    
+    for (KP in KEGG.pathways) {
+      tryCatch({
+        # Attempt to generate the plot with pathview
+        pathview(
+          gene.data = egenelist,
+          pathway.id = KP,
+          species = "mmu",
+          limit = list(gene = max(abs(egenelist)), cpd = 1),
+          new.signature = FALSE
+        )
+        dev.off()
+      }, error = function(e) {
+        # In case of an error, print the pathway ID and the error message
+        message(sprintf("Error with pathway %s: %s", KP, e$message))
+        # The loop will continue despite the error
+      })
+    }
+    
+    #Delete Extra Pathview files
+    
+    # List all files in the directory
+    all_files <- list.files(image_directory, full.names = TRUE)
+    
+    # Identify the files that do not end with '.pathview.png'
+    files_to_delete <- all_files[!grepl("\\.pathview\\.png$", all_files)]
+    
+    # Remove the identified files
+    file.remove(files_to_delete)
+    
+}
+
+

@@ -1,0 +1,2 @@
+"","ID","Description","setSize","enrichmentScore","NES","pvalue","p.adjust","qvalue","rank","leading_edge","core_enrichment"
+"1","mmu01100","Metabolic pathways - Mus musculus (house mouse)",20,0.436583502222068,2.00721629925774,0.00324992657921041,0.00649985315842081,0.00342097534653727,120,"tags=70%, list=26%, signal=54%","16891/11761/19215/107869/216188/69065/18104/27053/14859/12494/19225/17768/67092/11846"
