@@ -15,8 +15,8 @@ library(data.table)
 
 ### Read Files ####
 
-setwd("C:/Users/axi313/Documents/Bulk_RNAseq_UChicago_NLRP3")
-load.path <- "C:/Users/axi313/Documents/Bulk_RNAseq_UChicago_NLRP3/Raw_Data/"
+setwd("C:/Users/ammas/Documents/Bulk_RNAseq_UChicago_NLRP3")
+load.path <- "C:/Users/ammas/Documents/Bulk_RNAseq_UChicago_NLRP3/Raw_Data/"
 
 # Replace "path/to/file" with the actual path to your file
 file_path <- paste0(load.path,"raw_combined_featureCounts.txt")
@@ -106,6 +106,82 @@ dds_M2 <- DESeqDataSetFromMatrix(countData = count_data[,metadata$cell_type == "
                                  design = ~ condition)
 dds_M2 <- DESeq(dds_M2)
 
+#### Heatmaps for genes of interest ##############
+# Load necessary libraries
+library(DESeq2)
+library(pheatmap)
+
+# Vector of mouse genes
+mouse_genes <- c("Ikbkb", "Traf6", "Ifnl2", "Mavs", "Eftud2", "Ddx58", 
+                 "Rela", "Irf3", "Il1a", "Ifih1", "Prkra", "Gsdmd", "Id2", 
+                 "Tlr2", "Ifnb1", "Ap3b1", "Nlrp3", "Nod2", "Il10rb", 
+                 "Tlr9", "Il17ra", "Sod1", "Hrh4", "Ifnar2", "Sdf2l1", 
+                 "Vpreb1", "Pnp", "Igll1", "Rnase7", "Siglec15", "Psmb5", 
+                 "Cebpe", "Il25", "Cmtm5", "Psme1", "Psme2", "Nfatc4", 
+                 "Mx1", "Lif", "Ctsg", "Gzmb", "Tcn2", "Tnfrsf11a", 
+                 "Nfkbia", "Tmem173", "Stat1", "Il22ra1", "Bcl2l1", 
+                 "Jak1", "Jak2", "Jak3", "Tyk2")
+# Subset the metadata for M1 samples
+metadata_M1 <- metadata %>% filter(grepl("^M1", sample))
+
+# Extract normalized counts for M1
+normalized_counts_M1 <- counts(dds_M1, normalized=TRUE)
+
+# Filter the count data to include only the mouse genes
+selected_genes_M1 <- normalized_counts_M1[rownames(normalized_counts_M1) %in% mouse_genes,]
+
+# Create a mapping of file names to conditions
+file_to_condition_M1 <- setNames(metadata_M1$condition, metadata_M1$file.name)
+
+# Split file names by condition
+file_groups_M1 <- split(names(file_to_condition_M1), file_to_condition_M1)
+
+# Aggregate counts by condition for M1
+avg_counts_M1 <- sapply(file_groups_M1, function(files) {
+  rowMeans(selected_genes_M1[, files, drop=FALSE])
+})
+
+# Subset the metadata for M2 samples
+metadata_M2 <- metadata %>% filter(grepl("^M2", sample))
+
+# Extract normalized counts for M2
+normalized_counts_M2 <- counts(dds_M2, normalized=TRUE)
+
+# Filter the count data to include only the mouse genes
+selected_genes_M2 <- normalized_counts_M2[rownames(normalized_counts_M2) %in% mouse_genes,]
+
+# Create a mapping of file names to conditions
+file_to_condition_M2 <- setNames(metadata_M2$condition, metadata_M2$file.name)
+
+# Split file names by condition
+file_groups_M2 <- split(names(file_to_condition_M2), file_to_condition_M2)
+
+# Aggregate counts by condition for M2
+avg_counts_M2 <- sapply(file_groups_M2, function(files) {
+  rowMeans(selected_genes_M2[, files, drop=FALSE])
+})
+
+### Heatmaps
+
+# Create and save a high-resolution heatmap for M1
+png("Heatmap_M1.png", width = 2500, height = 3200, res = 300)
+pheatmap(avg_counts_M1, 
+         cluster_rows = FALSE, 
+         cluster_cols = T, 
+         scale = "row", 
+         main = "Heatmap of Selected Genes in M1 Cells Grouped by Condition")
+dev.off()
+
+# Create and save a high-resolution heatmap for M2
+png("Heatmap_M2.png", width = 2500, height = 3200, res = 300)
+pheatmap(avg_counts_M2, 
+         cluster_rows = FALSE, 
+         cluster_cols = T, 
+         scale = "row", 
+         main = "Heatmap of Selected Genes in M2 Cells Grouped by Condition")
+dev.off()
+
+##########################################################
 #### Differential Expression M1 ####
 
 # Define the list of contrasts
