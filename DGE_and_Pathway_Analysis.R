@@ -181,6 +181,44 @@ pheatmap(avg_counts_M2,
          main = "Heatmap of Selected Genes in M2 Cells Grouped by Condition")
 dev.off()
 
+### Do the same for M1 vs M2 U
+# Subset the metadata for M1 samples
+# Create a new column combining cell_type and condition
+metadata$cell_condition <- paste(metadata$cell_type, metadata$condition, sep = "_")
+
+
+metadata_U <- metadata
+
+metadata_U$cell_condition <- ifelse(metadata_U$cell_condition %in% c("M1_U", "M2_U"), 
+                                  metadata_U$cell_condition, "Other")
+# Extract normalized counts
+normalized_counts <- counts(dds, normalized=TRUE)
+
+# Filter the count data to include only the mouse genes
+selected_genes <- normalized_counts[rownames(normalized_counts) %in% mouse_genes,]
+
+# Create a mapping of file names to conditions
+file_to_condition_U <- setNames(metadata_U$cell_condition, metadata_U$file.name)
+
+# Split file names by condition
+file_groups_U <- split(names(file_to_condition_U), file_to_condition_U)
+
+# Aggregate counts by condition for M1
+avg_counts_U <- sapply(file_groups_U, function(files) {
+  rowMeans(selected_genes[, files, drop=FALSE])
+})
+avg_counts_U <- avg_counts_U[, !colnames(avg_counts_U) %in% "Other"]
+
+
+# Create and save a high-resolution heatmap for M2
+png("Heatmap_U.png", width = 2500, height = 3200, res = 300)
+pheatmap(avg_counts_U, 
+         cluster_rows = FALSE, 
+         cluster_cols = T, 
+         scale = "row", 
+         main = "Heatmap of Selected Genes in M2 Cells Grouped by Condition")
+dev.off()
+
 ##########################################################
 #### Differential Expression M1 ####
 
