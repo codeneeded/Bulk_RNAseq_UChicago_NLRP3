@@ -6,12 +6,16 @@ library(ComplexHeatmap)
 library(clusterProfiler)
 library(DOSE)
 library(enrichplot)
+library(Orthology.eg.db)
+library(org.Hs.eg.db)
 library(org.Mm.eg.db)
 library(magrittr)
 library(pathview)
 library(stats)
 library(ggplot2)
 library(data.table)
+library(biomaRt)
+
 
 ### Read Files ####
 
@@ -112,7 +116,7 @@ library(DESeq2)
 library(pheatmap)
 
 # Vector of mouse genes
-mouse_genes <- c("Ikbkb", "Traf6", "Ifnl2", "Mavs", "Eftud2", "Ddx58", 
+mouse_genes <- c("Spp1", "Ikbkb", "Traf6", "Ifnl2", "Mavs", "Eftud2", "Ddx58", 
                  "Rela", "Irf3", "Il1a", "Ifih1", "Prkra", "Gsdmd", "Id2", 
                  "Tlr2", "Ifnb1", "Ap3b1", "Nlrp3", "Nod2", "Il10rb", 
                  "Tlr9", "Il17ra", "Sod1", "Hrh4", "Ifnar2", "Sdf2l1", 
@@ -558,3 +562,428 @@ for (runx in all.sample.names.2) {
 }
 
 
+####### Heatmaps #####
+# Load necessary libraries
+library(dplyr)
+library(readr)
+library(pheatmap)
+setwd("C:/Users/ammas/Documents/Bulk_RNAseq_UChicago_NLRP3/Reviewer_Comment/Raw")
+
+# Define the list of files
+files <- c("M1.ADT.vs.U.DGE.csv", "M2vsM1.U.DGE.csv", "M2.ADT.vs.U.DGE.csv")
+
+# Read and process the data
+data_list <- lapply(files, function(file) {
+  df <- read_csv(file)
+  colnames(df)[1] <- "Gene"  # Rename the first column to "Gene"
+  df
+})
+names(data_list) <- files
+# List of mouse genes including converted human genes
+mouse_genes <- c("Spp1","Ikbkb", "Traf6", "Ifnl2", "Mavs", "Eftud2", "Ddx58", 
+                 "Rela", "Irf3", "Il1a", "Ifih1", "Prkra", "Gsdmd", "Id2", 
+                 "Tlr2", "Ifnb1", "Ap3b1", "Nlrp3", "Nod2", "Il10rb", 
+                 "Tlr9", "Il17ra", "Sod1", "Hrh4", "Ifnar2", "Sdf2l1", 
+                 "Vpreb1", "Pnp", "Igll1", "Rnase7", "Siglec15", "Psmb5", 
+                 "Cebpe", "Il25", "Cmtm5", "Psme1", "Psme2", "Nfatc4", 
+                 "Mx1", "Lif", "Ctsg", "Gzmb", "Tcn2", "Tnfrsf11a", 
+                 "Nfkbia", "Tmem173", "Stat1", "Il22ra1", "Bcl2l1", 
+                 "Jak1", "Jak2", "Jak3", "Tyk2", "Cd68", "Trem2", 
+                 "C1qa", "C1qb", "C1qc", "Apoe", "Cd163")
+
+# Filter each dataset to retain only the genes of interest
+filtered_data <- lapply(data_list, function(df) {
+  df %>% filter(Gene %in% mouse_genes)
+})
+
+# Initialize an empty data frame to store combined results
+combined_data <- data.frame(Gene = mouse_genes)
+
+# Merge results from all comparisons
+for (name in names(filtered_data)) {
+  df <- filtered_data[[name]]
+  df$Gene <- as.character(df$Gene)
+  combined_data <- left_join(combined_data, df %>% select(Gene, log2FoldChange, padj), by = "Gene")
+  colnames(combined_data)[ncol(combined_data)-1] <- paste0("logFC_", name)
+  colnames(combined_data)[ncol(combined_data)] <- paste0("padj_", name)
+}
+
+# Replace NA values with 0 for logFC and 1 for padj
+combined_data[is.na(combined_data)] <- 0
+rownames(combined_data) <- combined_data$Gene
+
+
+# Reorder the columns as requested
+logFC_matrix <- combined_data[, c("logFC_M2.ADT.vs.U.DGE.csv", 
+                                 "logFC_M1.ADT.vs.U.DGE.csv", 
+                                 "logFC_M2vsM1.U.DGE.csv")]
+
+# Rename columns
+colnames(logFC_matrix) <- c("M2: ADT Vs U", "M1: ADT Vs U", "U: M2 Vs M1")
+
+# Reorder significance matrix accordingly
+significance_matrix <- combined_data[, c("padj_M2.ADT.vs.U.DGE.csv", 
+                                               "padj_M1.ADT.vs.U.DGE.csv", 
+                                               "padj_M2vsM1.U.DGE.csv")]
+colnames(significance_matrix) <- colnames(logFC_matrix)
+
+
+# Convert adjusted p-values to stars
+star_matrix <- apply(significance_matrix, c(1, 2), function(p) {
+  if (is.na(p)) {
+    ""
+  } else if (p <= 0.001) {
+    "***"
+  } else if (p <= 0.01) {
+    "**"
+  } else if (p <= 0.05) {
+    "*"
+  } else {
+    ""
+  }
+})
+
+
+########
+# Find the min and max logFC values
+min_logFC <- min(logFC_matrix, na.rm = TRUE)
+max_logFC <- max(logFC_matrix, na.rm = TRUE)
+
+# Determine the larger absolute value to scale colors properly
+range_max <- max(abs(min_logFC), abs(max_logFC))  # Ensures the scale covers the full range
+
+# Create a gradient where white is exactly at 0
+color_palette <- colorRampPalette(c("darkblue", "purple", "magenta","lightpink","white", "green"))(100)
+
+
+png("DGE_heatmap.png", width = 650, height = 2300, res = 200)  # Adjust size and resolution
+pheatmap(logFC_matrix,
+         cluster_rows = TRUE,
+         cluster_cols = FALSE,  # Keep the order you requested
+         display_numbers = star_matrix,
+         fontsize_number = 12,
+         number_color = "red",  # Keep significance stars red
+         main = "Differential Expression Heatmap",
+         color = color_palette,
+         scale = "none")  # Prevents any forced transformations
+dev.off()  # Close the graphics device
+
+
+
+# 1. Remove rows with all NAs
+logFC_matrix_clean <- logFC_matrix[apply(logFC_matrix, 1, function(x) !all(is.na(x))), ]
+
+# 2. Remove rows with zero variance (needed for scaling)
+logFC_matrix_clean <- logFC_matrix_clean[apply(logFC_matrix_clean, 1, function(x) sd(x, na.rm = TRUE) > 0), ]
+
+# 3. Also subset your star matrix accordingly
+star_matrix_clean <- star_matrix[rownames(logFC_matrix_clean), colnames(logFC_matrix_clean)]
+# Create a gradient where white is exactly at 0
+color_palette_2 <- colorRampPalette(c("darkblue", "purple","white", 'yellow',"green"))(100)
+
+color_palette_2 <- colorRampPalette(c("darkblue", "purple", "white", "yellow", "forestgreen"))(100)
+
+png("DGE_heatmap_row_scaled.png", width = 650, height = 2300, res = 200)  # Adjust size and resolution
+pheatmap(logFC_matrix_clean,
+         cluster_rows = TRUE,
+         cluster_cols = FALSE,  # Keep the order you requested
+         display_numbers = star_matrix_clean,
+         fontsize_number = 12,
+         number_color = "red",  # Keep significance stars red
+         main = "Differential Expression Heatmap",
+         color = color_palette_2,
+         scale = "row")  # Prevents any forced transformations
+dev.off()  # Close the graphics device
+
+################################# ENRICHMENT ANALYSIS ###################################################
+
+##################### Gene Sets - Self Defined #############################################################
+# Extract DESeq2 contrast results
+res_M1_NLRP3_vs_U   <- results(dds_M1, contrast = c("condition", "NLRP3", "U"))
+res_M1_Combo_vs_ADT <- results(dds_M1, contrast = c("condition", "Combo", "ADT"))
+
+res_M2_NLRP3_vs_U   <- results(dds_M2, contrast = c("condition", "NLRP3", "U"))
+res_M2_Combo_vs_ADT <- results(dds_M2, contrast = c("condition", "Combo", "ADT"))
+
+
+
+genes_M1_pol <- c("AK3", "APOL1", "APOL2", "APOL3", "APOL6", "ATF3", "BCL2A1", "BIRC3",
+              "CCL5", "CCL15", "CCL19", "CCL20", "CCR7", "CHI3L2", "CSPG2",
+              "CXCL9", "CXCL10", "CXCL11", "ECGF1", "EDN1", "FAS", "GADD45G",
+              "HESX1", "HSD11B1", "HSXIAPAF1", "IGFBP4", "IL6", "IL12B", "IL15",
+              "IL2RA", "IL7R", "IL15RA", "INDO", "INHBA", "IRF1", "IRF7",
+              "OAS2", "OASL", "PBEF1", "PDGFA", "PFKFB3", "PFKP", "PLA1A",
+              "PSMA2", "PSMB9", "PSME2", "PTX3", "SLC21A15", "SLC2A6", "SLC31A2",
+              "SLC7A5", "SPHK1", "TNF", "TRAIL")
+genes_M2_pol <- c("ADK", "ALOX15", "CA2", "CCL13", "CCL18", "CCL23", "CD36", "CERK",
+              "CHN2", "CLECSF13", "CTSC", "CXCR4", "DCL-1", "DCSIGN", "DECTIN1",
+              "EGR2", "FGL2", "FN1", "GAS7", "GPR86", "HEXB", "HNMT", "HRH1",
+              "HS3ST1", "HS3ST2", "IGF1", "LIPA", "LTA4H", "MAF", "MRC1",
+              "MS4A4A", "MS4A6A", "MSR1", "P2RY14", "P2RY5", "SEPP1", "SLC21A9",
+              "SLC38A6", "SLC4A7", "TGFB1", "TGFBR2", "TLR5", "TPST2")
+genes_inflammasome <- c("AIM2", "TRAF6", "TXNIP", "XIAP", "TNFAIP3", "BCL2",
+                        "CASP1", "CASP12", "CASP4", "CARD6", "CTSB", "CTSV",
+                        "IL18", "IL1A", "IL1B", "IL18BP", "IL33", "MYD88",
+                        "IRF1", "IRF3", "NFkB1", "NFKBID", "NFKBIB", "NLRP3",
+                        "PSTPIP1", "PTGS2", "PYCARD", "TIRAP", "TNFSF14", "TNFSF4")
+genes_pyroptosis <- c("AIM2", "CASP1", "CASP3", "CASP4", "CASP5", "CASP6", "CASP8", "CASP9",
+                      "ELANE", "GPX4", "GSDMA", "GSDMB", "GSDMC", "GSDMD", "GSDME",
+                      "IL1A", "IL1B", "IL6", "IL18", "NOD1", "NOD2", "NLRC4", "NLRP1",
+                      "NLRP2", "NLRP3", "NLRP6", "NLRP7", "PJVK", "PLCG1", "PRKACA",
+                      "PYCARD", "SCAF11", "TNF")
+
+
+
+#--------------------------#
+# Define Gene Set List     #
+#--------------------------#
+
+mapIt <- function(x) {
+  require("Orthology.eg.db", character.only = TRUE)
+  require("org.Mm.eg.db", character.only = TRUE)
+  require("org.Hs.eg.db", character.only = TRUE)
+  
+  human <- mapIds(org.Hs.eg.db, x, "ENTREZID", "ALIAS")
+  mapped <- select(Orthology.eg.db, human, "Mus.musculus", "Homo.sapiens")
+  
+  mouse <- mapIds(org.Mm.eg.db, as.character(mapped[, 2]), "SYMBOL", "ENTREZID")
+  mouse <- do.call(c, lapply(mouse, function(x) if (is.null(x)) NA else x))
+  
+  result <- cbind(Human.Symbol = x, mapped, Mouse.Symbol = mouse)
+  result <- result[!is.na(result$Mouse.Symbol), ]
+  return(result)
+}
+
+# List of your human gene sets
+gene_sets_human <- list(
+  M1_polarization = genes_M1_pol,
+  M2_polarization = genes_M2_pol,
+  Inflammasome    = genes_inflammasome,
+  Pyroptosis      = genes_pyroptosis
+)
+
+# Function to map each set
+convert_to_mouse <- function(gene_list) {
+  mapped_df <- mapIt(gene_list)
+  unique(mapped_df[, "Mouse.Symbol"])
+}
+
+# Apply to all sets
+gene_sets_mouse <- lapply(gene_sets_human, convert_to_mouse)
+
+# Optional: check results
+str(gene_sets_mouse, max.level = 1)
+
+
+#--------------------------#
+# Create Output Folders    #
+#--------------------------#
+
+base_dir <- "C:/Users/ammas/Documents/Bulk_RNAseq_UChicago_NLRP3/Reviewer_Comment/Module_Analysis"
+dir.create(base_dir, recursive = TRUE, showWarnings = FALSE)
+
+out_dirs <- list(
+  gsea_results = file.path(base_dir, "GSEA_Results"),
+  gsea_plots   = file.path(base_dir, "GSEA_Plots"),
+  gsea_summary = file.path(base_dir, "GSEA_Summary")
+)
+
+lapply(out_dirs, dir.create, recursive = TRUE, showWarnings = FALSE)
+
+#--------------------------#
+# Convert to TERM2GENE     #
+#--------------------------#
+gene_sets <- gene_sets_mouse
+
+# Re-create TERM2GENE from mouse symbols
+term2gene <- bind_rows(lapply(names(gene_sets), function(set) {
+  data.frame(term = set, gene = gene_sets[[set]])
+}))
+#--------------------------#
+# Rank Genes for GSEA      #
+#--------------------------#
+
+get_ranked_genes <- function(res) {
+  res <- res[!is.na(res$log2FoldChange), ]
+  ranked_genes <- setNames(res$log2FoldChange, rownames(res))
+  ranked_genes <- sort(ranked_genes, decreasing = TRUE)
+  return(ranked_genes)
+}
+
+ranked_lists <- list(
+  M1_NLRP3_vs_U   = get_ranked_genes(res_M1_NLRP3_vs_U),
+  M1_Combo_vs_ADT = get_ranked_genes(res_M1_Combo_vs_ADT),
+  M2_NLRP3_vs_U   = get_ranked_genes(res_M2_NLRP3_vs_U),
+  M2_Combo_vs_ADT = get_ranked_genes(res_M2_Combo_vs_ADT)
+)
+ranked_genes
+#--------------------------#
+# Run GSEA and Save        #
+#--------------------------#
+length(intersect(names(ranked_genes), term2gene$gene))
+# Reset containers
+gsea_results <- list()
+gsea_summary_all <- list()
+
+# Loop over contrasts
+for (contrast_name in names(ranked_lists)) {
+  message("Running GSEA for: ", contrast_name)
+  
+  ranked_genes <- ranked_lists[[contrast_name]]
+  
+  # Run GSEA with full result capture
+  gsea <- GSEA(geneList = ranked_genes,
+               TERM2GENE = term2gene,
+               pvalueCutoff = 1,
+               verbose = FALSE)
+  
+  # Save RDS
+  saveRDS(gsea, file = file.path(out_dirs$gsea_results, paste0("GSEA_", contrast_name, ".rds")))
+  
+  # If we have results, process them
+  if (nrow(gsea@result) > 0) {
+    gsea_result_df <- gsea@result
+    
+    # Add significance column
+    gsea_result_df$Significance <- ifelse(gsea_result_df$p.adjust < 0.05, "**",
+                                          ifelse(gsea_result_df$pvalue < 0.05, "*", ""))
+    
+    # Add label for plotting
+    gsea_result_df$Label <- paste0(gsea_result_df$Description, " ", gsea_result_df$Significance)
+    
+    # Add metadata
+    gsea_result_df$Comparison <- contrast_name
+    
+    # Save CSV per comparison (optional)
+    write.csv(gsea_result_df,
+              file = file.path(out_dirs$gsea_summary, paste0("GSEA_", contrast_name, "_results.csv")),
+              row.names = FALSE)
+    
+    # Append to global summary list
+    gsea_summary_all[[contrast_name]] <- gsea_result_df
+    
+    # Dotplot using top 10 rows and significance labels
+    top_n <- min(10, nrow(gsea_result_df))
+    top_rows <- gsea_result_df[1:top_n, ]
+    
+    p <- dotplot(gsea, showCategory = top_n, label_format = 40) +
+      ggtitle(paste("GSEA:", contrast_name)) +
+      scale_y_discrete(labels = rev(top_rows$Label)) +
+      theme(axis.text.y = element_text(size = 10)) +
+      labs(caption = "*Nominal p < 0.05; **FDR < 0.05")
+    
+    ggsave(filename = file.path(out_dirs$gsea_plots, paste0("GSEA_", contrast_name, ".png")),
+           plot = p, width = 7, height = 5)
+  } else {
+    message("No enriched gene sets for ", contrast_name)
+  }
+  
+  # Store result object
+  gsea_results[[contrast_name]] <- gsea
+}
+
+# Final: Combine and save global summary CSV
+if (length(gsea_summary_all) > 0) {
+  summary_df <- bind_rows(gsea_summary_all)
+  write.csv(summary_df,
+            file = file.path(out_dirs$gsea_summary, "GSEA_Summary_All_Comparisons.csv"),
+            row.names = FALSE)
+} else {
+  message("No GSEA results to summarize.")
+}
+#####
+#--------------------------#
+# Combine & Save Summary   #
+#--------------------------#
+
+extract_gsea_summary <- function(gsea_obj, label) {
+  if (is.null(gsea_obj) || nrow(gsea_obj@result) == 0) return(NULL)
+  df <- gsea_obj@result
+  df$Comparison <- label
+  return(df)
+}
+
+gsea_summary <- bind_rows(lapply(names(gsea_results), function(name) {
+  extract_gsea_summary(gsea_results[[name]], name)
+}))
+
+write.csv(gsea_summary,
+          file = file.path(out_dirs$gsea_summary, "GSEA_Summary_All_Comparisons.csv"),
+          row.names = FALSE)
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+# Get unique clusters
+clusters <- unique(VL_DGE_ALL$cluster)
+# Define databases for enrichment analysis
+databases <- c("TRRUST_Transcription_Factors_2019", "ChEA_2022","TRANSFAC_and_JASPAR_PWMs","KEGG_2021_Human", 
+               "WikiPathways_2024_Human","GO_Biological_Process_2023","MSigDB_Hallmark_2020",
+               "Panther_2016","Reactome_2022","BioPlanet_2019")
+# Initialize a list to store results
+enrichment_results <- list()
+
+#### Viral Load
+
+### mRNA
+# Initialize a list to store results
+enrichment_results <- list()
+# Perform enrichment for each cluster
+for (i in 0:29) {
+  # Get genes for the current cluster
+  gene_list <- VL_DGE_ALL$gene[VL_DGE_ALL$cluster == i]
+  
+  # Run enrichment analysis
+  enrichment_results[[as.character(i)]] <- enrichR::enrichr(genes = gene_list, databases = databases)
+}
+
+# Define the output directory
+output_dir <- "C:/Users/axi313/Documents/TARA_Entry/WNN/Manuscript/Enrichment_Viral_Load/mRNA/Data/"
+
+if (!dir.exists(output_dir)) dir.create(output_dir)
+
+# Create separate Excel files for each cluster
+for (cluster in names(enrichment_results)) {
+  # Create a new workbook for this cluster
+  wb <- createWorkbook()
+  
+  for (db_name in names(enrichment_results[[cluster]])) {
+    # Get the filtered results for this database
+    db_results <- enrichment_results[[cluster]][[db_name]]
+    
+    # Create a valid sheet name (truncate to 31 characters)
+    sheet_name <- substr(db_name, 1, 31)
+    
+    # Add the results to a new sheet
+    addWorksheet(wb, sheet_name)
+    writeData(wb, sheet_name, db_results)
+  }
+  
+  # Define the file name for the current cluster
+  output_file <- paste0(output_dir, "Cluster_", cluster, "_Enrichment_Results.xlsx")
+  
+  # Save the workbook
+  saveWorkbook(wb, output_file, overwrite = TRUE)
+}

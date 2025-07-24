@@ -1,0 +1,5 @@
+"ID","Description","setSize","enrichmentScore","NES","pvalue","p.adjust","qvalue","rank","leading_edge","core_enrichment","Significance","Label","Comparison"
+"M2_polarization","M2_polarization",35,0.541890545414474,1.23485456585421,0.1438127090301,0.575250836120401,0.575250836120401,2720,"tags=11%, list=12%, signal=10%","Fn1/Car2/Egr2/Fgl2","","M2_polarization ","M1_NLRP3_vs_U"
+"M1_polarization","M1_polarization",42,0.321945479551766,0.755807881526589,0.904220779220779,1,1,5445,"tags=24%, list=23%, signal=18%","Ccl19/Inhba/Sphk1/Ccr7/Apol6/Tymp/Slc7a5/Vcan/Il15ra/Pla1a","","M1_polarization ","M1_NLRP3_vs_U"
+"Pyroptosis","Pyroptosis",24,-0.258136068547275,-0.575932512605987,0.987468671679198,1,1,7721,"tags=46%, list=33%, signal=31%","Casp8/Casp9/Nlrp1a/Tnf/Gsdmd/Gpx4/Prkaca/Plcg1/Il18/Il1a/Il1b","","Pyroptosis ","M1_NLRP3_vs_U"
+"Inflammasome","Inflammasome",25,0.228742629043718,0.499227795115606,1,1,1,2041,"tags=4%, list=9%, signal=4%","Tnfsf4","","Inflammasome ","M1_NLRP3_vs_U"

@@ -1,0 +1,5 @@
+"ID","Description","setSize","enrichmentScore","NES","pvalue","p.adjust","qvalue","rank","leading_edge","core_enrichment","Significance","Label","Comparison"
+"M2_polarization","M2_polarization",35,-0.610678701263441,-1.39682223908592,0.0559105431309904,0.223642172523962,0.223642172523962,5393,"tags=31%, list=23%, signal=24%","Selenop/P2ry13/Maf/Ms4a4a/Egr2/P2ry14/Hs3st1/Slco2b1/Fgl2/Hnmt/Fn1","","M2_polarization ","M1_Combo_vs_ADT"
+"Pyroptosis","Pyroptosis",24,-0.5667398770049,-1.20225540120758,0.202970297029703,0.405940594059406,0.405940594059406,1119,"tags=12%, list=5%, signal=12%","Nlrp6/Pjvk/Elane","","Pyroptosis ","M1_Combo_vs_ADT"
+"M1_polarization","M1_polarization",42,-0.371448044249529,-0.876249148847895,0.677165354330709,0.902887139107612,0.902887139107612,4099,"tags=21%, list=17%, signal=18%","Tymp/Hesx1/Edn1/Ido1/Pla1a/Il2ra/Ccl20/Cxcl9/Ccl19","","M1_polarization ","M1_Combo_vs_ADT"
+"Inflammasome","Inflammasome",25,-0.26068496785013,-0.556173505797328,0.996672212978369,0.996672212978369,0.996672212978369,6507,"tags=28%, list=28%, signal=20%","Irf3/Il18bp/Txnip/Nfkbid/Card6/Il1a/Il33","","Inflammasome ","M1_Combo_vs_ADT"
