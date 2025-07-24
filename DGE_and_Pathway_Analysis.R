@@ -821,9 +821,18 @@ ranked_genes
 # Run GSEA and Save        #
 #--------------------------#
 length(intersect(names(ranked_genes), term2gene$gene))
+
 # Reset containers
 gsea_results <- list()
 gsea_summary_all <- list()
+logfc_summary_all <- list()
+
+# Helper to calculate mean log2FC
+calc_mean_logfc <- function(gene_list, res_df) {
+  overlapping_genes <- intersect(gene_list, rownames(res_df))
+  mean_fc <- mean(res_df[overlapping_genes, "log2FoldChange"], na.rm = TRUE)
+  return(mean_fc)
+}
 
 # Loop over contrasts
 for (contrast_name in names(ranked_lists)) {
@@ -831,7 +840,13 @@ for (contrast_name in names(ranked_lists)) {
   
   ranked_genes <- ranked_lists[[contrast_name]]
   
-  # Run GSEA with full result capture
+  # Also need full DESeq2 result for log2FC extraction
+  deseq_res <- as.data.frame(ranked_genes)
+  colnames(deseq_res) <- "log2FoldChange"
+  deseq_res$gene <- rownames(deseq_res)
+  rownames(deseq_res) <- deseq_res$gene
+  
+  # Run GSEA
   gsea <- GSEA(geneList = ranked_genes,
                TERM2GENE = term2gene,
                pvalueCutoff = 1,
@@ -840,29 +855,41 @@ for (contrast_name in names(ranked_lists)) {
   # Save RDS
   saveRDS(gsea, file = file.path(out_dirs$gsea_results, paste0("GSEA_", contrast_name, ".rds")))
   
-  # If we have results, process them
+  # Store GSEA result object
+  gsea_results[[contrast_name]] <- gsea
+  
+  # Store mean log2FC for all modules
+  module_means <- data.frame(
+    Module = names(gene_sets),
+    Mean_log2FC = sapply(gene_sets, calc_mean_logfc, res_df = deseq_res),
+    Comparison = contrast_name
+  )
+  logfc_summary_all[[contrast_name]] <- module_means
+  
+  # If GSEA has results, process them
   if (nrow(gsea@result) > 0) {
     gsea_result_df <- gsea@result
     
-    # Add significance column
+    # Significance markers
     gsea_result_df$Significance <- ifelse(gsea_result_df$p.adjust < 0.05, "**",
                                           ifelse(gsea_result_df$pvalue < 0.05, "*", ""))
     
-    # Add label for plotting
+    # Plotting label
     gsea_result_df$Label <- paste0(gsea_result_df$Description, " ", gsea_result_df$Significance)
-    
-    # Add metadata
     gsea_result_df$Comparison <- contrast_name
     
-    # Save CSV per comparison (optional)
+    # Merge in mean log2FC for matched modules
+    gsea_result_df <- left_join(gsea_result_df, module_means, by = c("ID" = "Module", "Comparison" = "Comparison"))
+    
+    # Save CSV for this comparison
     write.csv(gsea_result_df,
               file = file.path(out_dirs$gsea_summary, paste0("GSEA_", contrast_name, "_results.csv")),
               row.names = FALSE)
     
-    # Append to global summary list
+    # Append to overall summary
     gsea_summary_all[[contrast_name]] <- gsea_result_df
     
-    # Dotplot using top 10 rows and significance labels
+    # Dotplot (top N rows)
     top_n <- min(10, nrow(gsea_result_df))
     top_rows <- gsea_result_df[1:top_n, ]
     
@@ -877,12 +904,9 @@ for (contrast_name in names(ranked_lists)) {
   } else {
     message("No enriched gene sets for ", contrast_name)
   }
-  
-  # Store result object
-  gsea_results[[contrast_name]] <- gsea
 }
 
-# Final: Combine and save global summary CSV
+# Combine and save final summary outputs
 if (length(gsea_summary_all) > 0) {
   summary_df <- bind_rows(gsea_summary_all)
   write.csv(summary_df,
@@ -891,30 +915,14 @@ if (length(gsea_summary_all) > 0) {
 } else {
   message("No GSEA results to summarize.")
 }
-#####
-#--------------------------#
-# Combine & Save Summary   #
-#--------------------------#
 
-extract_gsea_summary <- function(gsea_obj, label) {
-  if (is.null(gsea_obj) || nrow(gsea_obj@result) == 0) return(NULL)
-  df <- gsea_obj@result
-  df$Comparison <- label
-  return(df)
+# Save mean log2FC summary
+if (length(logfc_summary_all) > 0) {
+  logfc_df <- bind_rows(logfc_summary_all)
+  write.csv(logfc_df,
+            file = file.path(out_dirs$gsea_summary, "Mean_log2FC_Summary_All_Comparisons.csv"),
+            row.names = FALSE)
 }
-
-gsea_summary <- bind_rows(lapply(names(gsea_results), function(name) {
-  extract_gsea_summary(gsea_results[[name]], name)
-}))
-
-write.csv(gsea_summary,
-          file = file.path(out_dirs$gsea_summary, "GSEA_Summary_All_Comparisons.csv"),
-          row.names = FALSE)
-
-
-
-
-
 
 
 
