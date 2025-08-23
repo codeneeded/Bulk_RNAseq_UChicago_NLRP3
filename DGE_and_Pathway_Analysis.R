@@ -10,12 +10,11 @@ library(Orthology.eg.db)
 library(org.Hs.eg.db)
 library(org.Mm.eg.db)
 library(magrittr)
-library(pathview)
 library(stats)
 library(ggplot2)
 library(data.table)
 library(biomaRt)
-
+library(dplyr)
 
 ### Read Files ####
 
@@ -701,9 +700,18 @@ dev.off()  # Close the graphics device
 # Extract DESeq2 contrast results
 res_M1_NLRP3_vs_U   <- results(dds_M1, contrast = c("condition", "NLRP3", "U"))
 res_M1_Combo_vs_ADT <- results(dds_M1, contrast = c("condition", "Combo", "ADT"))
+res_M1_ADT_vs_U <- results(dds_M1, contrast = c("condition", "ADT", "U"))
+res_M1_Combo_vs_U <- results(dds_M1, contrast = c("condition", "Combo", "U"))
+res_M1_Combo_vs_NLRP3 <- results(dds_M1, contrast = c("condition", "Combo", "NLRP3"))
+res_M1_NLRP3_vs_ADT <- results(dds_M1, contrast = c("condition", "NLRP3", "ADT"))
 
 res_M2_NLRP3_vs_U   <- results(dds_M2, contrast = c("condition", "NLRP3", "U"))
 res_M2_Combo_vs_ADT <- results(dds_M2, contrast = c("condition", "Combo", "ADT"))
+res_M2_ADT_vs_U <- results(dds_M2, contrast = c("condition", "ADT", "U"))
+res_M2_Combo_vs_U <- results(dds_M2, contrast = c("condition", "Combo", "U"))
+res_M2_Combo_vs_NLRP3 <- results(dds_M2, contrast = c("condition", "Combo", "NLRP3"))
+res_M2_NLRP3_vs_ADT <- results(dds_M2, contrast = c("condition", "NLRP3", "ADT"))
+
 
 
 
@@ -732,7 +740,14 @@ genes_pyroptosis <- c("AIM2", "CASP1", "CASP3", "CASP4", "CASP5", "CASP6", "CASP
                       "NLRP2", "NLRP3", "NLRP6", "NLRP7", "PJVK", "PLCG1", "PRKACA",
                       "PYCARD", "SCAF11", "TNF")
 
+genes_non_phagocytosis <- c("ATAD1", "B2M", "FCGR1", "IGHM", "IL4", 
+                            "MFF", "STAP1", "SYNE1")
 
+genes_aerobic_glycolysis <- c("ALDOA", "BSG", "ENO1", "ENO2", "ENO3", 
+                              "GPI", "HK1", "LDHA", "LDHB", "PFKL", 
+                              "PFKM", "PFKP", "PGAM1", "PGAM2", "PGK1", 
+                              "PKLR", "PKM", "SLC16A1", "SLC16A3", 
+                              "SLC2A1", "TPI1")
 
 #--------------------------#
 # Define Gene Set List     #
@@ -759,7 +774,9 @@ gene_sets_human <- list(
   M1_polarization = genes_M1_pol,
   M2_polarization = genes_M2_pol,
   Inflammasome    = genes_inflammasome,
-  Pyroptosis      = genes_pyroptosis
+  Pyroptosis      = genes_pyroptosis,
+  Non_Phagocytosis=genes_non_phagocytosis,
+  Aerobic_Glycolysis=genes_aerobic_glycolysis
 )
 
 # Function to map each set
@@ -811,12 +828,23 @@ get_ranked_genes <- function(res) {
 }
 
 ranked_lists <- list(
-  M1_NLRP3_vs_U   = get_ranked_genes(res_M1_NLRP3_vs_U),
-  M1_Combo_vs_ADT = get_ranked_genes(res_M1_Combo_vs_ADT),
-  M2_NLRP3_vs_U   = get_ranked_genes(res_M2_NLRP3_vs_U),
-  M2_Combo_vs_ADT = get_ranked_genes(res_M2_Combo_vs_ADT)
+  # ----- M1 -----
+  M1_ADT_vs_U        = get_ranked_genes(res_M1_ADT_vs_U),
+  M1_NLRP3_vs_U      = get_ranked_genes(res_M1_NLRP3_vs_U),
+  M1_Combo_vs_U      = get_ranked_genes(res_M1_Combo_vs_U),
+  M1_Combo_vs_ADT    = get_ranked_genes(res_M1_Combo_vs_ADT),
+  M1_Combo_vs_NLRP3  = get_ranked_genes(res_M1_Combo_vs_NLRP3),
+  M1_NLRP3_vs_ADT    = get_ranked_genes(res_M1_NLRP3_vs_ADT),
+  
+  # ----- M2 -----
+  M2_ADT_vs_U        = get_ranked_genes(res_M2_ADT_vs_U),
+  M2_NLRP3_vs_U      = get_ranked_genes(res_M2_NLRP3_vs_U),
+  M2_Combo_vs_U      = get_ranked_genes(res_M2_Combo_vs_U),
+  M2_Combo_vs_ADT    = get_ranked_genes(res_M2_Combo_vs_ADT),
+  M2_Combo_vs_NLRP3  = get_ranked_genes(res_M2_Combo_vs_NLRP3),
+  M2_NLRP3_vs_ADT    = get_ranked_genes(res_M2_NLRP3_vs_ADT)
 )
-ranked_genes
+
 #--------------------------#
 # Run GSEA and Save        #
 #--------------------------#
@@ -943,7 +971,7 @@ if (length(logfc_summary_all) > 0) {
 
 
 
-
+########################################################################################################
 # Get unique clusters
 clusters <- unique(VL_DGE_ALL$cluster)
 # Define databases for enrichment analysis
