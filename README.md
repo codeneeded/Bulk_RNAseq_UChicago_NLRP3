@@ -157,7 +157,3 @@ R (≥ 4.2) with the following packages:
 ## Citation
 
 Manuscript in Preperation
-
-## License
-
-*(Add a license — e.g. MIT for code, CC-BY for figures — or state "All rights reserved" if you'd rather decide later.)*
