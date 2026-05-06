@@ -4,8 +4,6 @@ Bulk RNA-seq analysis of **mouse bone marrow–derived macrophages** *(confirm c
 
 This is a collaboration with the **University of Chicago**.
 
-> *Note on naming.* The condition `ADT` here refers to the lab-internal abbreviation for one of the inflammasome stimuli used in this study and is **unrelated** to "ADT" in the CITE-seq sense (Antibody-Derived Tags). *(Spell out the actual reagent: e.g. ATP, alum, etc.)*
-
 ---
 
 ## Experimental design
