@@ -1,0 +1,7 @@
+"Module","human_genes","mouse_orthologs","detected_M1_ADT_vs_U","dropped_at_minGSSize_10"
+"M1_polarization",54,43,43,FALSE
+"M2_polarization",43,36,36,FALSE
+"Inflammasome",30,24,24,FALSE
+"Pyroptosis",33,24,24,FALSE
+"Non_Phagocytosis",8,7,7,TRUE
+"Aerobic_Glycolysis",21,21,21,FALSE

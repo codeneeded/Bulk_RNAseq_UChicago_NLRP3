@@ -85,6 +85,14 @@ Combo vs NLRP3
 
 plus four **M2-vs-M1** contrasts (one at each stimulation level: U, ADT, NLRP3, Combo). Each contrast is exported to `DGE/.../<contrast>.DGE.csv`.
 
+> **Use `DGE/M2vsM1_WithinCondition/` for the M2-vs-M1 contrasts, not `DGE/M2vsM1/`.**
+> The original loop in `DGE_and_Pathway_Analysis.R` subset the DESeqDataSet by rows, which selects
+> genes rather than samples. The four files in `DGE/M2vsM1/` are therefore disjoint quarters of the
+> gene list and all carry the same contrast — the `cell_type` main effect at the reference treatment
+> level (ADT) — regardless of the treatment named in the filename. They are kept for traceability.
+> `M2vsM1_WithinCondition_and_Fig1b_Heatmap.R` recomputes each comparison on its six matched
+> libraries with `~ cell_type`, and rebuilds the Fig. 1b panel from the corrected tables.
+
 ### 3. Pathway / functional enrichment — clusterProfiler
 For each contrast, ranked gene lists drive **GSEA** against:
 - **GO** (Biological Process) via `gseGO` with `org.Mm.eg.db`
